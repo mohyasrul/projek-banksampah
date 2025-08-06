@@ -17,9 +17,14 @@ import {
   Download,
   Upload,
   Trash2,
-  AlertTriangle
+  User,
+  Clock,
+  LogOut,
+  Smartphone,
+  Globe
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface WastePrice {
   id: string;
@@ -30,6 +35,7 @@ interface WastePrice {
 
 export const Settings = () => {
   const { toast } = useToast();
+  const { user, logout } = useAuth();
   
   // Data harga sampah akan diambil dari API atau database
   const [wastePrices, setWastePrices] = useState<WastePrice[]>([
@@ -92,6 +98,20 @@ export const Settings = () => {
     });
   };
 
+  const handleLogout = () => {
+    logout();
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('id-ID', {
+      year: 'numeric',
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   return (
     <div className="space-y-4 sm:space-y-6 pb-12 sm:pb-0">
       <div>
@@ -100,6 +120,57 @@ export const Settings = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* User Profile */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Profil Pengguna
+            </CardTitle>
+            <CardDescription>Informasi akun yang sedang aktif</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-accent/30 rounded-lg">
+              <div className="space-y-1">
+                <p className="font-medium">{user?.name}</p>
+                <p className="text-sm text-muted-foreground">@{user?.username}</p>
+              </div>
+              <Badge variant={user?.role === 'admin' ? 'default' : 'secondary'}>
+                {user?.role === 'admin' ? 'Administrator' : 'Operator'}
+              </Badge>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 text-sm">
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Level Akses:</span>
+                <span className="font-medium">
+                  {user?.role === 'admin' ? 'Full Access' : 'Standard Access'}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-3 text-sm">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Login Terakhir:</span>
+                <span className="font-medium">
+                  {user?.loginTime ? formatDate(user.loginTime) : 'Tidak diketahui'}
+                </span>
+              </div>
+            </div>
+            
+            <Separator />
+            
+            <Button 
+              variant="destructive" 
+              onClick={handleLogout}
+              className="w-full"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Keluar dari Sistem
+            </Button>
+          </CardContent>
+        </Card>
+
         {/* Waste Prices Settings */}
         <Card>
           <CardHeader>
@@ -133,55 +204,114 @@ export const Settings = () => {
             </Button>
           </CardContent>
         </Card>
-
-        {/* App Configuration */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <SettingsIcon className="h-5 w-5" />
-              <span>Konfigurasi Aplikasi</span>
-            </CardTitle>
-            <CardDescription>Pengaturan umum aplikasi</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="rw-name">Nama RW</Label>
-              <Input
-                id="rw-name"
-                value={appSettings.rwName}
-                onChange={(e) => setAppSettings({ ...appSettings, rwName: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contact-person">Penanggung Jawab</Label>
-              <Input
-                id="contact-person"
-                value={appSettings.contactPerson}
-                onChange={(e) => setAppSettings({ ...appSettings, contactPerson: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="contact-phone">No. Telepon</Label>
-              <Input
-                id="contact-phone"
-                value={appSettings.contactPhone}
-                onChange={(e) => setAppSettings({ ...appSettings, contactPhone: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="address">Alamat</Label>
-              <Input
-                id="address"
-                value={appSettings.address}
-                onChange={(e) => setAppSettings({ ...appSettings, address: e.target.value })}
-              />
-            </div>
-          </CardContent>
-        </Card>
       </div>
+
+      {/* App Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <SettingsIcon className="h-5 w-5" />
+            <span>Konfigurasi Aplikasi</span>
+          </CardTitle>
+          <CardDescription>Pengaturan umum aplikasi</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="rw-name">Nama RW</Label>
+                <Input
+                  id="rw-name"
+                  value={appSettings.rwName}
+                  onChange={(e) => setAppSettings({ ...appSettings, rwName: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="contact-person">Penanggung Jawab</Label>
+                <Input
+                  id="contact-person"
+                  value={appSettings.contactPerson}
+                  onChange={(e) => setAppSettings({ ...appSettings, contactPerson: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="contact-phone">No. Telepon</Label>
+                <Input
+                  id="contact-phone"
+                  value={appSettings.contactPhone}
+                  onChange={(e) => setAppSettings({ ...appSettings, contactPhone: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="address">Alamat</Label>
+                <Input
+                  id="address"
+                  value={appSettings.address}
+                  onChange={(e) => setAppSettings({ ...appSettings, address: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* System Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Database className="h-5 w-5" />
+            <span>Pengaturan Sistem</span>
+          </CardTitle>
+          <CardDescription>Konfigurasi dan status sistem</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="flex items-center gap-3">
+                <Database className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Penyimpanan Data</p>
+                  <p className="text-xs text-muted-foreground">Login: Lokal | Data: Cloud</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-green-600 border-green-600">
+                Aktif
+              </Badge>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="flex items-center gap-3">
+                <Smartphone className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Mode Responsif</p>
+                  <p className="text-xs text-muted-foreground">Optimasi mobile dan desktop</p>
+                </div>
+              </div>
+              <Badge variant="outline" className="text-green-600 border-green-600">
+                Aktif
+              </Badge>
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="flex items-center gap-3">
+                <Globe className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">Bahasa</p>
+                  <p className="text-xs text-muted-foreground">Bahasa Indonesia</p>
+                </div>
+              </div>
+              <Badge variant="outline">
+                ID
+              </Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Notification Settings */}
       <Card>
@@ -302,41 +432,26 @@ export const Settings = () => {
       {/* System Information */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Shield className="h-5 w-5" />
-            <span>Informasi Sistem</span>
-          </CardTitle>
+          <CardTitle>Informasi Sistem</CardTitle>
+          <CardDescription>Detail versi dan konfigurasi aplikasi</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Versi Aplikasi</p>
-              <Badge variant="secondary">v1.0.0</Badge>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="p-4 bg-accent/30 rounded-lg">
+              <p className="text-2xl font-bold text-primary">v1.0</p>
+              <p className="text-xs text-muted-foreground">Versi Aplikasi</p>
             </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Database</p>
-              <Badge variant="outline">IndexedDB</Badge>
+            <div className="p-4 bg-accent/30 rounded-lg">
+              <p className="text-2xl font-bold text-green-600">Online</p>
+              <p className="text-xs text-muted-foreground">Status Sistem</p>
             </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Status</p>
-              <Badge className="bg-success text-success-foreground">Online</Badge>
+            <div className="p-4 bg-accent/30 rounded-lg">
+              <p className="text-2xl font-bold text-blue-600">React</p>
+              <p className="text-xs text-muted-foreground">Frontend</p>
             </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Total RT</p>
-              <p className="text-2xl font-bold">0</p>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Total Transaksi</p>
-              <p className="text-2xl font-bold">0</p>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Ukuran Database</p>
-              <p className="text-2xl font-bold">0 MB</p>
+            <div className="p-4 bg-accent/30 rounded-lg">
+              <p className="text-2xl font-bold text-purple-600">Local</p>
+              <p className="text-xs text-muted-foreground">Auth Storage</p>
             </div>
           </div>
         </CardContent>
