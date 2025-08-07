@@ -1,44 +1,65 @@
-import { useState } from "react";
+/**
+ * RTManagement Component
+ * Manajemen data RT dalam sistem Bank Sampah
+ * - CRUD operations untuk data RT
+ * - Real-time saldo tabungan per RT
+ * - Role-based access (admin bisa CRUD, operator read-only)
+ * - Integrasi dengan sistem setoran sampah
+ */
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Edit, Trash2, Users, Phone, MapPin } from "lucide-react";
+import { Plus, Edit, Trash2, Users, Phone, MapPin, Loader2, Wallet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-interface RT {
-  id: string;
-  nomor: string;
-  ketuaRT: string;
-  jumlahKK: number;
-  alamat: string;
-  kontak?: string;
-  saldo: number;
-  totalTransaksi: number;
-}
+import { databaseService, RT } from "@/services/databaseService";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const RTManagement = () => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingRT, setEditingRT] = useState<RT | null>(null);
-  
-  // Data akan diambil dari API atau database
+  const [loading, setLoading] = useState(false);
   const [rtList, setRTList] = useState<RT[]>([]);
 
   const [formData, setFormData] = useState({
-    nomor: "",
-    ketuaRT: "",
-    jumlahKK: "",
-    alamat: "",
-    kontak: ""
+    rtNumber: "",
+    rtLeader: "",
+    totalMembers: "",
+    address: "",
+    phone: ""
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Load data saat component mount
+  useEffect(() => {
+    loadRTList();
+  }, []);
+
+  const loadRTList = async () => {
+    try {
+      setLoading(true);
+      const data = await databaseService.getAllRTs();
+      setRTList(data);
+    } catch (error) {
+      console.error('Error loading RT list:', error);
+      toast({
+        title: "Error",
+        description: "Gagal memuat data RT",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.nomor || !formData.ketuaRT || !formData.jumlahKK || !formData.alamat) {
+    if (!formData.rtNumber || !formData.rtLeader || !formData.totalMembers || !formData.address) {
       toast({
         title: "Error",
         description: "Mohon lengkapi semua field yang wajib diisi",
@@ -47,218 +68,416 @@ export const RTManagement = () => {
       return;
     }
 
-    const newRT: RT = {
-      id: Date.now().toString(),
-      nomor: formData.nomor,
-      ketuaRT: formData.ketuaRT,
-      jumlahKK: parseInt(formData.jumlahKK),
-      alamat: formData.alamat,
-      kontak: formData.kontak,
-      saldo: 0,
-      totalTransaksi: 0
-    };
+    try {
+      setLoading(true);
 
-    if (editingRT) {
-      setRTList(rtList.map(rt => rt.id === editingRT.id ? { ...newRT, id: editingRT.id, saldo: editingRT.saldo, totalTransaksi: editingRT.totalTransaksi } : rt));
-      toast({
-        title: "Berhasil",
-        description: "Data RT berhasil diperbarui"
-      });
+      const rtData = {
+        rtNumber: formData.rtNumber,
+        rtLeader: formData.rtLeader,
+        phone: formData.phone,
+        address: formData.address,
+        totalMembers: parseInt(formData.totalMembers),
+        activeMembers: 0,
+        totalSavings: 0,
+        isActive: true
+      };
+
+      if (editingRT && editingRT.id) {
+        // Update existing RT
+        await databaseService.updateRT(editingRT.id, rtData);
+        toast({
+          title: "Berhasil",
+          description: "Data RT berhasil diperbarui"
+        });
+      } else {
+        // Create new RT
+        await databaseService.createRT(rtData);
+        toast({
+          title: "Berhasil",
+          description: "RT baru berhasil ditambahkan"
+        });
+      }
+
+      // Reload data
+      await loadRTList();
+      resetForm();
+      setIsAddDialogOpen(false);
       setEditingRT(null);
-    } else {
-      setRTList([...rtList, newRT]);
+
+    } catch (error: any) {
+      console.error('Error saving RT:', error);
       toast({
-        title: "Berhasil", 
-        description: "RT baru berhasil ditambahkan"
+        title: "Error",
+        description: error.message || "Gagal menyimpan data RT",
+        variant: "destructive"
       });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (rt: RT) => {
+    if (!window.confirm(`Yakin ingin menghapus RT ${rt.rtNumber}?`)) {
+      return;
     }
 
-    setFormData({ nomor: "", ketuaRT: "", jumlahKK: "", alamat: "", kontak: "" });
-    setIsAddDialogOpen(false);
+    try {
+      setLoading(true);
+      if (rt.id) {
+        await databaseService.deleteRT(rt.id);
+        toast({
+          title: "Berhasil",
+          description: "RT berhasil dihapus"
+        });
+        await loadRTList();
+      }
+    } catch (error: any) {
+      console.error('Error deleting RT:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Gagal menghapus RT",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({ rtNumber: "", rtLeader: "", totalMembers: "", address: "", phone: "" });
+    setEditingRT(null);
   };
 
   const handleEdit = (rt: RT) => {
-    setEditingRT(rt);
     setFormData({
-      nomor: rt.nomor,
-      ketuaRT: rt.ketuaRT,
-      jumlahKK: rt.jumlahKK.toString(),
-      alamat: rt.alamat,
-      kontak: rt.kontak || ""
+      rtNumber: rt.rtNumber,
+      rtLeader: rt.rtLeader,
+      totalMembers: rt.totalMembers.toString(),
+      address: rt.address,
+      phone: rt.phone || ""
     });
+    setEditingRT(rt);
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setRTList(rtList.filter(rt => rt.id !== id));
-    toast({
-      title: "Berhasil",
-      description: "Data RT berhasil dihapus"
-    });
+  const handleCloseDialog = () => {
+    setIsAddDialogOpen(false);
+    resetForm();
+  };
+
+  // Check if user can manage this RT
+  const canManageRT = (rt: RT) => {
+    if (user?.role === 'admin') return true;
+    if (user?.role === 'operator' && user?.rtNumber === rt.rtNumber) return true;
+    return false;
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6 pb-12 sm:pb-0">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-bold">Manajemen RT</h2>
-          <p className="text-muted-foreground text-sm sm:text-base">Kelola data Rukun Tetangga dalam RW</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-3 sm:p-6 space-y-4 sm:space-y-6 pb-24">
+      <div className="px1">
+        <h1 className="text-lg sm:text-xl font-semibold text-slate-700 mb-1">
+          Manajemen RT
+        </h1>
+      </div>
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl sm:rounded-3xl p-4 sm:p-8 text-white shadow-2xl">
+        <div className="absolute inset-0 bg-black/10"></div>
+        <div className="absolute -top-4 -right-4 w-16 h-16 sm:w-24 sm:h-24 bg-white/10 rounded-full blur-xl"></div>
+        <div className="absolute -bottom-8 -left-8 w-20 h-20 sm:w-32 sm:h-32 bg-white/5 rounded-full blur-2xl"></div>
         
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Tambah RT
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="w-[90vw] max-w-[380px] max-h-[80vh] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-300 rounded-xl">
-            <DialogHeader className="pb-3">
-              <DialogTitle className="text-base sm:text-lg font-semibold">{editingRT ? "Edit Data RT" : "Tambah RT Baru"}</DialogTitle>
-              <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
-                {editingRT ? "Perbarui informasi RT" : "Masukkan data RT yang akan didaftarkan"}
-              </DialogDescription>
-            </DialogHeader>
+        <div className="relative z-10">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 sm:mb-6 space-y-3 sm:space-y-0">
+            <div className="flex items-center space-x-3 sm:space-x-4">
+              <div className="bg-white/20 backdrop-blur-sm p-2 sm:p-3 rounded-xl sm:rounded-2xl border border-white/20">
+                <Users className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-blue-100 text-sm sm:text-lg">
+                  Kelola data RT dalam sistem bank sampah
+                </p>
+              </div>
+            </div>
+            {user && (
+              <div className="bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl p-2 sm:p-3 border border-white/30 self-start">
+                <p className="text-xs sm:text-sm text-blue-100">
+                  {user.fullName} • {user.role === 'admin' ? 'Administrator' : 'Operator'}
+                </p>
+              </div>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-xs sm:text-sm">Total RT</p>
+                  <p className="text-lg sm:text-2xl font-bold">{loading ? '...' : rtList.length}</p>
+                </div>
+                <Users className="h-6 w-6 sm:h-8 sm:w-8 text-blue-200 flex-shrink-0" />
+              </div>
+            </div>
             
-            <form onSubmit={handleSubmit} className="space-y-3 py-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="nomor" className="text-xs sm:text-sm font-medium">Nomor RT *</Label>
-                  <Input
-                    id="nomor"
-                    placeholder="RT 01"
-                    value={formData.nomor}
-                    onChange={(e) => setFormData({ ...formData, nomor: e.target.value })}
-                    className="h-8 sm:h-9 text-xs sm:text-sm rounded-lg"
-                  />
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-xs sm:text-sm">RT Aktif</p>
+                  <p className="text-lg sm:text-2xl font-bold">{loading ? '...' : rtList.filter(rt => rt.isActive).length}</p>
                 </div>
+                <Badge className="bg-green-500/20 text-green-200 border-green-300/30">Aktif</Badge>
+              </div>
+            </div>
+            
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/20">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-xs sm:text-sm">Total KK</p>
+                  <p className="text-lg sm:text-2xl font-bold">
+                    {loading ? '...' : rtList.reduce((sum, rt) => sum + rt.totalMembers, 0)}
+                  </p>
+                </div>
+                <Users className="h-6 w-6 sm:h-8 sm:w-8 text-blue-200 flex-shrink-0" />
+              </div>
+            </div>
+          </div>
+          
+          {user?.role === 'admin' && (
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="lg" className="w-full sm:w-auto bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Tambah RT Baru
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingRT ? "Edit RT" : "Tambah RT Baru"}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {editingRT ? "Perbarui informasi RT" : "Masukkan informasi RT baru"}
+                  </DialogDescription>
+                </DialogHeader>
                 
-                <div className="space-y-1.5">
-                  <Label htmlFor="jumlahKK" className="text-xs sm:text-sm font-medium">Jumlah KK *</Label>
-                  <Input
-                    id="jumlahKK"
-                    type="number"
-                    placeholder="45"
-                    value={formData.jumlahKK}
-                    onChange={(e) => setFormData({ ...formData, jumlahKK: e.target.value })}
-                    className="h-8 sm:h-9 text-xs sm:text-sm rounded-lg"
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-1.5">
-                <Label htmlFor="ketuaRT" className="text-xs sm:text-sm font-medium">Ketua RT *</Label>
-                <Input
-                  id="ketuaRT"
-                  placeholder="Nama Ketua RT"
-                  value={formData.ketuaRT}
-                  onChange={(e) => setFormData({ ...formData, ketuaRT: e.target.value })}
-                  className="h-8 sm:h-9 text-xs sm:text-sm rounded-lg"
-                />
-              </div>
-              
-              <div className="space-y-1.5">
-                <Label htmlFor="alamat" className="text-xs sm:text-sm font-medium">Alamat *</Label>
-                <Input
-                  id="alamat"
-                  placeholder="Jl. Contoh No. 1-15"
-                  value={formData.alamat}
-                  onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
-                  className="h-8 sm:h-9 text-xs sm:text-sm rounded-lg"
-                />
-              </div>
-              
-              <div className="space-y-1.5">
-                <Label htmlFor="kontak" className="text-xs sm:text-sm font-medium">Kontak (Opsional)</Label>
-                <Input
-                  id="kontak"
-                  placeholder="081234567890"
-                  value={formData.kontak}
-                  onChange={(e) => setFormData({ ...formData, kontak: e.target.value })}
-                  className="h-8 sm:h-9 text-xs sm:text-sm rounded-lg"
-                />
-              </div>
-              
-              <div className="flex flex-col sm:flex-row gap-2 pt-3">
-                <Button type="submit" className="h-8 sm:h-9 flex-1 text-xs sm:text-sm rounded-lg">
-                  {editingRT ? "Perbarui" : "Tambah"}
-                </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  className="h-8 sm:h-9 flex-1 sm:flex-none text-xs sm:text-sm rounded-lg"
-                  onClick={() => {
-                    setIsAddDialogOpen(false);
-                    setEditingRT(null);
-                    setFormData({ nomor: "", ketuaRT: "", jumlahKK: "", alamat: "", kontak: "" });
-                  }}
-                >
-                  Batal
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="rtNumber">Nomor RT *</Label>
+                    <Input
+                      id="rtNumber"
+                      placeholder="Contoh: 001"
+                      value={formData.rtNumber}
+                      onChange={(e) => setFormData({...formData, rtNumber: e.target.value})}
+                      disabled={loading}
+                      required
+                      className="rounded-lg"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="rtLeader">Ketua RT *</Label>
+                    <Input
+                      id="rtLeader"
+                      placeholder="Nama Ketua RT"
+                      value={formData.rtLeader}
+                      onChange={(e) => setFormData({...formData, rtLeader: e.target.value})}
+                      disabled={loading}
+                      required
+                      className="rounded-lg"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="totalMembers">Jumlah KK *</Label>
+                    <Input
+                      id="totalMembers"
+                      type="number"
+                      placeholder="Jumlah Kepala Keluarga"
+                      value={formData.totalMembers}
+                      onChange={(e) => setFormData({...formData, totalMembers: e.target.value})}
+                      disabled={loading}
+                      required
+                      className="rounded-lg"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Alamat *</Label>
+                    <Input
+                      id="address"
+                      placeholder="Alamat lengkap RT"
+                      value={formData.address}
+                      onChange={(e) => setFormData({...formData, address: e.target.value})}
+                      disabled={loading}
+                      required
+                      className="rounded-lg"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Kontak</Label>
+                    <Input
+                      id="phone"
+                      placeholder="Nomor telepon/HP"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      disabled={loading}
+                      className="rounded-lg"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" disabled={loading} className="flex-1 rounded-lg">
+                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {editingRT ? "Perbarui" : "Simpan"}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={handleCloseDialog} disabled={loading} className="rounded-lg">
+                      Batal
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {rtList.length === 0 ? (
-          <div className="col-span-full text-center py-8">
-            <p className="text-muted-foreground">Belum ada data RT. Klik "Tambah RT" untuk memulai.</p>
+      {/* Loading State */}
+      {loading && !rtList.length && (
+        <div className="flex items-center justify-center py-8 sm:py-12">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 sm:h-12 sm:w-12 animate-spin mx-auto mb-3 sm:mb-4 text-blue-600" />
+            <p className="text-sm sm:text-base text-slate-600">Memuat data RT...</p>
           </div>
-        ) : (
-          rtList.map((rt) => (
-          <Card key={rt.id} className="hover:shadow-md transition-shadow">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{rt.nomor}</CardTitle>
-                  <CardDescription>{rt.ketuaRT}</CardDescription>
+        </div>
+      )}
+
+      {/* RT Cards Grid - Mobile Optimized */}
+      <div className="grid gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {rtList.map((rt) => (
+          <Card key={rt.id} className="border-0 shadow-lg rounded-xl sm:rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 hover:scale-105 bg-white">
+            <CardHeader className="pb-3 sm:pb-4 p-4 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2 sm:space-x-3">
+                  <div className="bg-blue-100 p-1.5 sm:p-2 rounded-lg sm:rounded-xl">
+                    <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base sm:text-lg font-bold text-slate-800">RT {rt.rtNumber}</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm text-slate-500">{rt.rtLeader}</CardDescription>
+                  </div>
                 </div>
-                <Badge variant="secondary">
-                  {rt.totalTransaksi} transaksi
+                <Badge 
+                  variant={rt.isActive ? "default" : "secondary"}
+                  className={`text-xs ${rt.isActive ? 'bg-green-100 text-green-700 border-green-200' : 'bg-slate-100 text-slate-600'}`}
+                >
+                  {rt.isActive ? "Aktif" : "Nonaktif"}
                 </Badge>
               </div>
             </CardHeader>
             
-            <CardContent className="space-y-3">
-              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                <Users className="h-4 w-4" />
-                <span>{rt.jumlahKK} KK</span>
+            <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6 pt-0">
+              {/* Statistics */}
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="bg-slate-50 rounded-lg sm:rounded-xl p-2 sm:p-3">
+                  <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-slate-600 mb-1">
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span>Total KK</span>
+                  </div>
+                  <p className="text-sm sm:text-base font-bold text-slate-800">{rt.totalMembers}</p>
+                </div>
+                
+                <div className="bg-green-50 rounded-lg sm:rounded-xl p-2 sm:p-3">
+                  <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-green-600 mb-1">
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span>Aktif</span>
+                  </div>
+                  <p className="text-sm sm:text-base font-bold text-green-700">{rt.activeMembers}</p>
+                </div>
               </div>
               
-              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                <MapPin className="h-4 w-4" />
-                <span>{rt.alamat}</span>
+              {/* Address */}
+              <div className="flex items-start gap-2 text-xs sm:text-sm text-slate-600 bg-slate-50 rounded-lg sm:rounded-xl p-2 sm:p-3">
+                <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mt-0.5 flex-shrink-0" />
+                <span className="leading-relaxed">{rt.address}</span>
               </div>
               
-              {rt.kontak && (
-                <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                  <Phone className="h-4 w-4" />
-                  <span>{rt.kontak}</span>
+              {/* Phone */}
+              {rt.phone && (
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-600 bg-slate-50 rounded-lg sm:rounded-xl p-2 sm:p-3">
+                  <Phone className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                  <span>{rt.phone}</span>
                 </div>
               )}
-              
-              <div className="pt-2 border-t">
-                <p className="text-sm font-medium">
-                  Saldo Tabungan: <span className="text-success">Rp {rt.saldo.toLocaleString('id-ID')}</span>
-                </p>
+
+              {/* Total Savings */}
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-emerald-100">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs sm:text-sm text-emerald-600 font-medium">Total Saldo Tabungan</p>
+                    <p className="text-base sm:text-lg font-bold text-emerald-700">
+                      Rp {rt.totalSavings.toLocaleString('id-ID')}
+                    </p>
+                  </div>
+                  <div className="bg-emerald-100 p-1.5 sm:p-2 rounded-lg">
+                    <Wallet className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-600" />
+                  </div>
+                </div>
               </div>
-              
-              <div className="flex space-x-2">
-                <Button variant="outline" size="sm" onClick={() => handleEdit(rt)}>
-                  <Edit className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => handleDelete(rt.id)}>
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Hapus
-                </Button>
-              </div>
+
+              {/* Action Buttons */}
+              {canManageRT(rt) && (
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEdit(rt)}
+                    className="flex-1 rounded-lg sm:rounded-xl hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700"
+                    disabled={loading}
+                  >
+                    <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="text-xs sm:text-sm">Edit</span>
+                  </Button>
+                  {user?.role === 'admin' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDelete(rt)}
+                      className="rounded-lg sm:rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200"
+                      disabled={loading}
+                    >
+                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
-        )))}
+        ))}
       </div>
+
+      {/* Empty State - Mobile Optimized */}
+      {!loading && rtList.length === 0 && (
+        <Card className="border-0 shadow-lg rounded-xl sm:rounded-2xl overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-50">
+          <CardContent className="p-6 sm:p-12 text-center">
+            <div className="bg-blue-100 rounded-full w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+              <Users className="h-8 w-8 sm:h-10 sm:w-10 text-blue-600" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-bold mb-2 text-slate-800">Belum Ada Data RT</h3>
+            <p className="text-sm sm:text-base text-slate-600 mb-6 sm:mb-8 max-w-md mx-auto">
+              Mulai dengan menambahkan RT pertama untuk sistem bank sampah RW Anda
+            </p>
+            {user?.role === 'admin' && (
+              <Button 
+                onClick={() => setIsAddDialogOpen(true)}
+                size="lg"
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-6 sm:px-8 py-2 sm:py-3"
+              >
+                <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
+                Tambah RT Pertama
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

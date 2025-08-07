@@ -4,7 +4,7 @@ import { Navigation } from "@/components/Navigation";
 import { Dashboard } from "@/components/Dashboard";
 import { RTManagement } from "@/components/RTManagement";
 import { WasteDeposit } from "@/components/WasteDeposit";
-import { Savings } from "@/components/Savings";
+import Savings from "@/components/Savings";
 import { Reports } from "@/components/Reports";
 import { Settings } from "@/components/Settings";
 

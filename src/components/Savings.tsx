@@ -1,356 +1,567 @@
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+/**
+ * Savings Component - Mobile Optimized
+ * Manages savings from waste deposits with withdrawal functionality
+ * Features: RT savings overview, recent transactions, mobile-friendly floating action button
+ */
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { databaseService } from '@/services/databaseService';
 import { 
   Wallet, 
-  ArrowUpRight, 
-  ArrowDownRight, 
-  Eye, 
-  Download,
-  TrendingUp,
-  DollarSign,
-  History,
-  Target
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+  Home, 
+  TrendingUp, 
+  BarChart, 
+  CreditCard,
+  Minus,
+  Users
+} from 'lucide-react';
 
 interface RTSavings {
-  id: string;
-  rt: string;
-  balance: number;
-  totalDeposits: number;
-  totalWithdrawals: number;
-  transactionCount: number;
-  lastTransaction: string;
+  rtNumber: string;
+  totalSavings: number;
+  memberCount: number;
 }
 
 interface Transaction {
   id: string;
-  rt: string;
-  type: "deposit" | "withdrawal";
+  memberNumber: string;
   amount: number;
+  type: 'deposit' | 'withdrawal';
   description: string;
   date: string;
-  balance: number;
 }
 
-export const Savings = () => {
+export default function Savings() {
+  const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedRT, setSelectedRT] = useState("");
-  const [withdrawalAmount, setWithdrawalAmount] = useState("");
-  const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   
-  // Data akan diambil dari API atau database
-  const [rtSavings, setRTSavings] = useState<RTSavings[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [rtList, setRtList] = useState<RTSavings[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  
+  // Withdrawal dialog state
+  const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawForm, setWithdrawForm] = useState({
+    rtNumber: '',
+    amount: '',
+    description: ''
+  });
 
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-
-  const totalSavings = rtSavings.reduce((sum, rt) => sum + rt.balance, 0);
-  const totalDeposits = rtSavings.reduce((sum, rt) => sum + rt.totalDeposits, 0);
-  const totalWithdrawals = rtSavings.reduce((sum, rt) => sum + rt.totalWithdrawals, 0);
-
-  const selectedRTData = rtSavings.find(rt => rt.rt === selectedRT);
-
-  const handleWithdrawal = () => {
-    const amount = parseFloat(withdrawalAmount);
-    
-    if (!selectedRT || !amount || amount <= 0) {
-      toast({
-        title: "Error",
-        description: "Pilih RT dan masukkan jumlah penarikan yang valid",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!selectedRTData || amount > selectedRTData.balance) {
-      toast({
-        title: "Error", 
-        description: "Saldo tidak mencukupi untuk penarikan ini",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Update RT balance
-    setRTSavings(rtSavings.map(rt => 
-      rt.rt === selectedRT 
-        ? { 
-            ...rt, 
-            balance: rt.balance - amount,
-            totalWithdrawals: rt.totalWithdrawals + amount,
-            transactionCount: rt.transactionCount + 1,
-            lastTransaction: new Date().toISOString().split('T')[0]
-          }
-        : rt
-    ));
-
-    // Add transaction record
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
-      rt: selectedRT,
-      type: "withdrawal",
-      amount: amount,
-      description: "Penarikan tabungan",
-      date: new Date().toISOString(),
-      balance: selectedRTData.balance - amount
-    };
-
-    setTransactions([newTransaction, ...transactions]);
-
-    toast({
-      title: "Penarikan Berhasil!",
-      description: `${selectedRT} berhasil menarik Rp ${amount.toLocaleString('id-ID')}`,
-    });
-
-    setWithdrawalAmount("");
-    setSelectedRT("");
-    setIsWithdrawDialogOpen(false);
+  // Calculate summary
+  const summary = {
+    totalSavings: rtList.reduce((sum, rt) => sum + rt.totalSavings, 0),
+    totalRTs: rtList.length,
+    activeRTs: rtList.filter(rt => rt.totalSavings > 0).length,
+    averageSavings: rtList.length > 0 ? rtList.reduce((sum, rt) => sum + rt.totalSavings, 0) / rtList.length : 0
   };
 
+  // Filter RTs based on search and filter type
+  const filteredRTs = rtList.filter(rt => {
+    const matchesSearch = rt.rtNumber.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (filterType === 'positive') return matchesSearch && rt.totalSavings > 0;
+    if (filterType === 'zero') return matchesSearch && rt.totalSavings === 0;
+    
+    return matchesSearch;
+  });
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      
+      // Load RT savings data
+      const rtsData = await databaseService.getAllRTs();
+      const savingsData = await Promise.all(
+        rtsData.map(async (rt) => {
+          // Calculate total savings for RT by getting collective member savings
+          const collectiveMember = await databaseService.getMember(`RT${rt.rtNumber}-COLLECTIVE`);
+          return {
+            rtNumber: rt.rtNumber,
+            totalSavings: collectiveMember?.totalSavings || 0,
+            memberCount: rt.activeMembers || 0
+          };
+        })
+      );
+      
+      setRtList(savingsData);
+      
+      // Load recent transactions (last 10)
+      const transactions = await databaseService.getAllSavingsTransactions(10);
+      setRecentTransactions(transactions.map(t => ({
+        id: t.id || '',
+        memberNumber: t.memberNumber,
+        amount: t.amount,
+        type: t.type,
+        description: t.description,
+        date: t.date.toISOString()
+      })));
+      
+    } catch (error) {
+      console.error('Error loading savings data:', error);
+      toast({
+        title: "Error",
+        description: "Gagal memuat data tabungan",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const getTransactionColor = (type: string) => {
+    return type === 'deposit' ? 'text-green-600' : 'text-red-600';
+  };
+
+  const handleWithdraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!withdrawForm.rtNumber || !withdrawForm.amount || !withdrawForm.description) {
+      toast({
+        title: "Error",
+        description: "Mohon lengkapi semua field",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const amount = parseFloat(withdrawForm.amount);
+    if (amount <= 0) {
+      toast({
+        title: "Error", 
+        description: "Jumlah penarikan harus lebih dari 0",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Cek saldo RT
+    const selectedRT = rtList.find(rt => rt.rtNumber === withdrawForm.rtNumber);
+    if (!selectedRT || selectedRT.totalSavings < amount) {
+      toast({
+        title: "Error",
+        description: "Saldo tidak mencukupi untuk penarikan",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setWithdrawLoading(true);
+      
+      // Create withdrawal transaction
+      await databaseService.createWithdrawal(
+        `RT${withdrawForm.rtNumber}-COLLECTIVE`, // memberNumber
+        amount,
+        withdrawForm.description,
+        user?.uid || "system"
+      );
+
+      toast({
+        title: "Penarikan Berhasil",
+        description: `Penarikan Rp ${amount.toLocaleString('id-ID')} untuk RT ${withdrawForm.rtNumber} berhasil`,
+      });
+
+      // Reset form and reload data
+      setWithdrawForm({ rtNumber: "", amount: "", description: "" });
+      setIsWithdrawDialogOpen(false);
+      await loadData();
+
+    } catch (error: any) {
+      console.error('Error creating withdrawal:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Gagal melakukan penarikan",
+        variant: "destructive"
+      });
+    } finally {
+      setWithdrawLoading(false);
+    }
+  };
+
+  // Filter RT yang bisa ditarik (hanya yang punya saldo > 0)
+  const availableRTsForWithdraw = filteredRTs.filter(rt => rt.totalSavings > 0);
+
   return (
-    <div className="space-y-4 sm:space-y-6 pb-12 sm:pb-0">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl sm:text-2xl font-bold">Manajemen Tabungan</h2>
-          <p className="text-muted-foreground text-sm sm:text-base">Kelola tabungan RT dan riwayat transaksi</p>
-        </div>
+    <>
+      {/* Modern Layout with Background */}
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-3 sm:p-6 space-y-4 sm:space-y-6 pb-24">
         
-        <Dialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <ArrowDownRight className="mr-2 h-4 w-4" />
-              Penarikan
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="w-[90vw] max-w-[380px] max-h-[80vh] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-300 rounded-xl">
-            <DialogHeader className="pb-3">
-              <DialogTitle className="text-base sm:text-lg font-semibold">Penarikan Tabungan</DialogTitle>
-              <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
-                Proses penarikan tabungan RT
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-3 py-1">
-              <div className="space-y-2">
-                <Label htmlFor="rt-select" className="text-xs sm:text-sm font-medium">Pilih RT</Label>
-                <select 
-                  id="rt-select"
-                  className="w-full h-8 sm:h-9 px-3 py-1 text-xs sm:text-sm border border-input rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                  value={selectedRT}
-                  onChange={(e) => setSelectedRT(e.target.value)}
-                >
-                  <option value="">Pilih RT</option>
-                  {rtSavings.map((rt) => (
-                    <option key={rt.id} value={rt.rt}>
-                      {rt.rt} - Saldo: Rp {rt.balance.toLocaleString('id-ID')}
-                    </option>
-                  ))}
-                </select>
+        {/* Modern Hero Section */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 rounded-2xl sm:rounded-3xl p-4 sm:p-8 text-white shadow-2xl">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="absolute -top-4 -right-4 w-16 h-16 sm:w-24 sm:h-24 bg-white/10 rounded-full blur-xl"></div>
+          <div className="absolute -bottom-8 -left-8 w-20 h-20 sm:w-32 sm:h-32 bg-white/5 rounded-full blur-2xl"></div>
+          
+          <div className="relative z-10">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 sm:mb-6 space-y-3 sm:space-y-0">
+              <div className="flex items-center space-x-3 sm:space-x-4">
+                <div className="bg-white/20 backdrop-blur-sm p-2 sm:p-3 rounded-xl sm:rounded-2xl border border-white/20">
+                  <Wallet className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-xl sm:text-3xl font-bold mb-1 truncate">
+                    Kelola Tabungan
+                  </h1>
+                  <p className="text-purple-100 text-sm sm:text-lg">
+                    Lihat dan kelola tabungan dari RT
+                  </p>
+                </div>
               </div>
               
-              {selectedRTData && (
-                <div className="bg-gradient-to-r from-success/10 to-success/5 border border-success/20 p-3 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-medium text-success-foreground">Saldo Tersedia</p>
-                      <p className="text-lg sm:text-xl font-bold text-success">Rp {selectedRTData.balance.toLocaleString('id-ID')}</p>
-                    </div>
-                    <Wallet className="h-6 w-6 sm:h-7 sm:w-7 text-success" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 mt-2 text-xs text-muted-foreground">
-                    <div>
-                      <p className="text-xs">Total Setoran</p>
-                      <p className="font-medium text-xs">Rp {selectedRTData.totalDeposits.toLocaleString('id-ID')}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs">Total Penarikan</p>
-                      <p className="font-medium text-xs">Rp {selectedRTData.totalWithdrawals.toLocaleString('id-ID')}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              <div className="space-y-2">
-                <Label htmlFor="withdrawal-amount" className="text-xs sm:text-sm font-medium">Jumlah Penarikan</Label>
+              {/* Search and Filter - Hero Style */}
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <div className="relative">
-                  <DollarSign className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
-                    id="withdrawal-amount"
-                    type="number"
-                    placeholder="0"
-                    value={withdrawalAmount}
-                    onChange={(e) => setWithdrawalAmount(e.target.value)}
-                    className="pl-8 h-8 sm:h-9 text-xs sm:text-sm rounded-lg"
-                    min="0"
-                    max={selectedRTData?.balance || 0}
+                    placeholder="Cari RT..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full sm:w-48 bg-white/20 border-white/30 text-white placeholder:text-purple-200 backdrop-blur-sm rounded-lg"
                   />
                 </div>
-                {selectedRTData && withdrawalAmount && parseFloat(withdrawalAmount) > selectedRTData.balance && (
-                  <p className="text-xs text-destructive">Jumlah melebihi saldo tersedia</p>
-                )}
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="w-full sm:w-36 bg-white/20 border-white/30 text-white backdrop-blur-sm rounded-lg">
+                    <SelectValue placeholder="Filter" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white border border-slate-200 rounded-lg shadow-lg">
+                    <SelectItem value="all">Semua RT</SelectItem>
+                    <SelectItem value="positive">Saldo Positif</SelectItem>
+                    <SelectItem value="zero">Saldo Kosong</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            {/* Summary Cards in Hero */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-100 text-xs sm:text-sm">Total Tabungan</p>
+                    <p className="text-lg sm:text-2xl font-bold">
+                      Rp {summary.totalSavings.toLocaleString('id-ID')}
+                    </p>
+                  </div>
+                  <Wallet className="h-6 w-6 sm:h-8 sm:w-8 text-purple-200 flex-shrink-0" />
+                </div>
               </div>
               
-              <div className="flex flex-col sm:flex-row gap-2 pt-3">
-                <Button 
-                  onClick={handleWithdrawal} 
-                  className="h-8 sm:h-9 flex-1 text-xs sm:text-sm rounded-lg"
-                  disabled={!selectedRT || !withdrawalAmount || (selectedRTData && parseFloat(withdrawalAmount) > selectedRTData.balance)}
-                >
-                  Proses Penarikan
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="h-8 sm:h-9 flex-1 sm:flex-none text-xs sm:text-sm rounded-lg"
-                  onClick={() => {
-                    setIsWithdrawDialogOpen(false);
-                    setSelectedRT("");
-                    setWithdrawalAmount("");
-                  }}
-                >
-                  Batal
-                </Button>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-100 text-xs sm:text-sm">Total RT</p>
+                    <p className="text-lg sm:text-2xl font-bold">{summary.totalRTs}</p>
+                  </div>
+                  <Home className="h-6 w-6 sm:h-8 sm:w-8 text-purple-200 flex-shrink-0" />
+                </div>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-100 text-xs sm:text-sm">RT Aktif</p>
+                    <p className="text-lg sm:text-2xl font-bold">{summary.activeRTs}</p>
+                  </div>
+                  <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-purple-200 flex-shrink-0" />
+                </div>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-white/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-100 text-xs sm:text-sm">Rata-rata</p>
+                    <p className="text-lg sm:text-2xl font-bold">
+                      Rp {summary.averageSavings.toLocaleString('id-ID')}
+                    </p>
+                  </div>
+                  <BarChart className="h-6 w-6 sm:h-8 sm:w-8 text-purple-200 flex-shrink-0" />
+                </div>
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </div>
+        </div>
 
-      {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tabungan</CardTitle>
-            <Wallet className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">Rp {totalSavings.toLocaleString('id-ID')}</div>
-            <p className="text-xs text-muted-foreground">Saldo keseluruhan RW</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Setoran</CardTitle>
-            <ArrowUpRight className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">Rp {totalDeposits.toLocaleString('id-ID')}</div>
-            <p className="text-xs text-muted-foreground">Akumulasi setoran sampah</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Penarikan</CardTitle>
-            <ArrowDownRight className="h-4 w-4 text-warning" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">Rp {totalWithdrawals.toLocaleString('id-ID')}</div>
-            <p className="text-xs text-muted-foreground">Total yang sudah ditarik</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* RT Savings List */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Target className="h-5 w-5" />
-              <span>Tabungan per RT</span>
+        {/* RT List - Enhanced Mobile Design */}
+        <Card className="border-0 shadow-lg rounded-xl sm:rounded-2xl overflow-hidden">
+          <CardHeader className="p-4 sm:p-6 bg-gradient-to-r from-slate-50 to-gray-50">
+            <CardTitle className="text-lg sm:text-xl font-bold text-slate-800 flex items-center">
+              <Home className="h-5 w-5 mr-2 text-blue-600" />
+              Daftar RT & Tabungan
             </CardTitle>
-            <CardDescription>Saldo dan aktivitas setiap RT</CardDescription>
+            <CardDescription className="text-xs sm:text-sm text-slate-600">
+              {filteredRTs.length} RT dari {summary.totalRTs} total RT
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {rtSavings.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">Belum ada data tabungan RT</p>
-              ) : (
-                rtSavings.map((rt) => (
-                <div key={rt.id} className="flex items-center justify-between p-4 bg-accent/30 rounded-lg hover:bg-accent/50 transition-colors">
-                  <div>
-                    <p className="font-medium">{rt.rt}</p>
-                    <div className="flex items-center space-x-4 text-xs text-muted-foreground mt-1">
-                      <span>{rt.transactionCount} transaksi</span>
-                      <span>Terakhir: {new Date(rt.lastTransaction).toLocaleDateString('id-ID')}</span>
+          <CardContent className="p-4 sm:p-6 pt-0">
+            {loading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="flex items-center space-x-4 p-3 animate-pulse">
+                    <Skeleton className="h-12 w-12 rounded-full bg-slate-200" />
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-4 w-24 bg-slate-200" />
+                      <Skeleton className="h-3 w-32 bg-slate-200" />
                     </div>
+                    <Skeleton className="h-6 w-24 bg-slate-200" />
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-success">Rp {rt.balance.toLocaleString('id-ID')}</p>
-                    <div className="flex items-center space-x-2 text-xs text-muted-foreground mt-1">
-                      <span className="flex items-center">
-                        <ArrowUpRight className="h-3 w-3 mr-1 text-success" />
-                        {rt.totalDeposits.toLocaleString('id-ID')}
-                      </span>
-                      <span className="flex items-center">
-                        <ArrowDownRight className="h-3 w-3 mr-1 text-warning" />
-                        {rt.totalWithdrawals.toLocaleString('id-ID')}
-                      </span>
-                    </div>
-                  </div>
+                ))}
+              </div>
+            ) : filteredRTs.length === 0 ? (
+              <div className="text-center py-8 sm:py-12">
+                <div className="bg-slate-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                  <Wallet className="h-8 w-8 text-slate-400" />
                 </div>
-              )))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Recent Transactions */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <History className="h-5 w-5" />
-              <span>Riwayat Transaksi</span>
-            </CardTitle>
-            <CardDescription>Aktivitas terbaru tabungan</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {transactions.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">Belum ada riwayat transaksi</p>
-              ) : (
-                transactions.slice(0, 8).map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between p-3 border-l-4 border-l-primary/20 bg-accent/20 rounded-r-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-full ${
-                      transaction.type === 'deposit' 
-                        ? 'bg-success/10' 
-                        : 'bg-warning/10'
-                    }`}>
-                      {transaction.type === 'deposit' ? (
-                        <ArrowUpRight className="h-4 w-4 text-success" />
-                      ) : (
-                        <ArrowDownRight className="h-4 w-4 text-warning" />
+                <h3 className="text-lg font-medium text-slate-600 mb-2">Tidak Ada Data RT</h3>
+                <p className="text-sm text-slate-500">Tidak ada RT yang cocok dengan filter yang dipilih</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredRTs.map((rt) => (
+                  <div 
+                    key={rt.rtNumber} 
+                    className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-slate-50 to-gray-50 rounded-lg sm:rounded-xl border border-slate-100 hover:shadow-md transition-all duration-300 hover:scale-[1.02]"
+                  >
+                    <div className="flex items-center space-x-3 sm:space-x-4">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+                        <Home className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm sm:text-base text-slate-800">RT {rt.rtNumber}</p>
+                        <p className="text-xs sm:text-sm text-slate-500 flex items-center">
+                          <Users className="h-3 w-3 mr-1" />
+                          {rt.memberCount} Anggota
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-bold text-sm sm:text-base ${
+                        rt.totalSavings > 0 ? 'text-green-600' : 'text-slate-400'
+                      }`}>
+                        Rp {rt.totalSavings.toLocaleString('id-ID')}
+                      </p>
+                      {rt.totalSavings > 0 && (
+                        <div className="w-2 h-2 bg-green-500 rounded-full ml-auto mt-1"></div>
                       )}
                     </div>
-                    <div>
-                      <p className="font-medium text-sm">{transaction.rt}</p>
-                      <p className="text-xs text-muted-foreground">{transaction.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(transaction.date).toLocaleString('id-ID')}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recent Transactions - Enhanced Design */}
+        <Card className="border-0 shadow-lg rounded-xl sm:rounded-2xl overflow-hidden">
+          <CardHeader className="p-4 sm:p-6 bg-gradient-to-r from-emerald-50 to-teal-50">
+            <CardTitle className="text-lg sm:text-xl font-bold text-slate-800 flex items-center">
+              <CreditCard className="h-5 w-5 mr-2 text-emerald-600" />
+              Transaksi Terbaru
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm text-slate-600">
+              {recentTransactions.length} transaksi terakhir
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6 pt-0">
+            {recentTransactions.length === 0 ? (
+              <div className="text-center py-8 sm:py-12">
+                <div className="bg-emerald-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                  <CreditCard className="h-8 w-8 text-emerald-600" />
+                </div>
+                <h3 className="text-lg font-medium text-slate-600 mb-2">Belum Ada Transaksi</h3>
+                <p className="text-sm text-slate-500">Transaksi akan muncul di sini setelah ada aktivitas</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentTransactions.map((transaction, index) => (
+                  <div 
+                    key={transaction.id} 
+                    className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-slate-50 to-gray-50 rounded-lg sm:rounded-xl border border-slate-100 hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="flex items-center space-x-3 sm:space-x-4">
+                      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shadow-lg ${
+                        transaction.type === 'deposit' 
+                          ? 'bg-gradient-to-br from-green-500 to-emerald-600' 
+                          : 'bg-gradient-to-br from-red-500 to-pink-600'
+                      }`}>
+                        {transaction.type === 'deposit' ? (
+                          <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                        ) : (
+                          <Minus className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <p className="font-bold text-sm sm:text-base text-slate-800 truncate">
+                            {transaction.memberNumber}
+                          </p>
+                          <div className={`w-2 h-2 rounded-full ${
+                            transaction.type === 'deposit' ? 'bg-green-500' : 'bg-red-500'
+                          }`}></div>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-600 truncate mb-1">
+                          {transaction.description}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          {new Date(transaction.date).toLocaleDateString('id-ID', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-2">
+                      <p className={`font-bold text-sm sm:text-base ${getTransactionColor(transaction.type)}`}>
+                        {transaction.type === 'deposit' ? '+' : '-'}Rp {transaction.amount.toLocaleString('id-ID')}
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`font-medium text-sm ${
-                      transaction.type === 'deposit' ? 'text-success' : 'text-warning'
-                    }`}>
-                      {transaction.type === 'deposit' ? '+' : '-'}Rp {transaction.amount.toLocaleString('id-ID')}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Saldo: Rp {transaction.balance.toLocaleString('id-ID')}
-                    </p>
-                  </div>
-                </div>
-              )))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
-    </div>
+
+      {/* Enhanced Floating Action Button */}
+      <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-40">
+        <Button
+          onClick={() => setIsWithdrawDialogOpen(true)}
+          size="lg"
+          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-xl bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white transition-all duration-300 hover:scale-110"
+          disabled={availableRTsForWithdraw.length === 0}
+        >
+          <Minus className="h-6 w-6 sm:h-7 sm:w-7" />
+        </Button>
+      </div>
+
+      {/* Enhanced Withdrawal Dialog */}
+      <Dialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
+        <DialogContent className="mx-4 max-w-md rounded-2xl border-0 shadow-2xl">
+          <DialogHeader className="text-center space-y-3 p-6 pb-4">
+            <div className="bg-gradient-to-r from-red-100 to-pink-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
+              <Minus className="h-8 w-8 text-red-600" />
+            </div>
+            <DialogTitle className="text-xl sm:text-2xl font-bold text-slate-800">
+              Penarikan Tabungan
+            </DialogTitle>
+            <DialogDescription className="text-sm sm:text-base text-slate-600">
+              Pilih RT dan masukkan jumlah yang akan ditarik
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleWithdraw} className="space-y-4 sm:space-y-6 p-6 pt-0">
+            <div className="space-y-2">
+              <Label htmlFor="rtNumber" className="text-sm font-semibold text-slate-700">Pilih RT</Label>
+              <Select
+                value={withdrawForm.rtNumber}
+                onValueChange={(value) => setWithdrawForm(prev => ({ ...prev, rtNumber: value }))}
+              >
+                <SelectTrigger className="rounded-xl border-slate-200 focus:border-red-500 focus:ring-red-500 h-12">
+                  <SelectValue placeholder="Pilih RT yang akan ditarik" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border border-slate-200 rounded-xl shadow-lg">
+                  {availableRTsForWithdraw.map((rt) => (
+                    <SelectItem key={rt.rtNumber} value={rt.rtNumber} className="hover:bg-red-50">
+                      <div className="flex flex-col items-start py-1">
+                        <span className="font-medium">RT {rt.rtNumber}</span>
+                        <span className="text-xs text-slate-500">
+                          Saldo: Rp {rt.totalSavings.toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="amount" className="text-sm font-semibold text-slate-700">Jumlah Penarikan</Label>
+              <div className="relative">
+                <Wallet className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  id="amount"
+                  type="number"
+                  placeholder="Masukkan jumlah penarikan"
+                  value={withdrawForm.amount}
+                  onChange={(e) => setWithdrawForm(prev => ({ ...prev, amount: e.target.value }))}
+                  className="pl-10 rounded-xl border-slate-200 focus:border-red-500 focus:ring-red-500 h-12"
+                  min="1000"
+                  step="1000"
+                />
+              </div>
+              {withdrawForm.rtNumber && (
+                <p className="text-xs text-slate-500">
+                  Saldo tersedia: Rp {availableRTsForWithdraw.find(rt => rt.rtNumber === withdrawForm.rtNumber)?.totalSavings.toLocaleString('id-ID')}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description" className="text-sm font-semibold text-slate-700">Keterangan</Label>
+              <Input
+                id="description"
+                placeholder="Keterangan penarikan (contoh: Bayar sampah)"
+                value={withdrawForm.description}
+                onChange={(e) => setWithdrawForm(prev => ({ ...prev, description: e.target.value }))}
+                className="rounded-xl border-slate-200 focus:border-red-500 focus:ring-red-500 h-12"
+              />
+            </div>
+
+            {/* Enhanced Preview */}
+            {withdrawForm.rtNumber && withdrawForm.amount && parseFloat(withdrawForm.amount) > 0 && (
+              <div className="bg-gradient-to-r from-red-50 to-pink-50 p-4 rounded-xl border border-red-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-red-800">Jumlah Penarikan</p>
+                    <p className="text-lg font-bold text-red-700">
+                      Rp {parseFloat(withdrawForm.amount).toLocaleString('id-ID')}
+                    </p>
+                  </div>
+                  <div className="bg-red-100 p-2 rounded-lg">
+                    <Minus className="h-5 w-5 text-red-600" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsWithdrawDialogOpen(false)}
+                className="flex-1 rounded-xl border-slate-200 hover:bg-slate-50 h-12"
+                disabled={withdrawLoading}
+              >
+                Batal
+              </Button>
+              <Button
+                type="submit"
+                className="flex-1 rounded-xl bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white shadow-lg h-12"
+                disabled={withdrawLoading}
+              >
+                {withdrawLoading ? 'Memproses...' : 'Tarik Saldo'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
-};
+}

@@ -1,106 +1,86 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-interface User {
-  id: string;
-  username: string;
-  name: string;
-  role: 'admin' | 'operator';
-  loginTime: string;
-}
+import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import { authService, UserProfile } from '../services/authService';
 
 interface AuthContextType {
-  user: User | null;
-  login: (username: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  user: UserProfile | null;
+  firebaseUser: FirebaseUser | null;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Default admin user - di production bisa ditambah lebih banyak
-const defaultUsers = [
-  {
-    id: '1',
-    username: 'admin',
-    password: 'admin123', // Di production, password harus di-hash
-    name: 'Administrator',
-    role: 'admin' as const
-  },
-  {
-    id: '2', 
-    username: 'operator',
-    password: 'op123',
-    name: 'Operator RW',
-    role: 'operator' as const
-  }
-];
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Load user from localStorage on app start
+  // Monitor Firebase auth state changes
   useEffect(() => {
-    const savedUser = localStorage.getItem('banksampah_user');
-    if (savedUser) {
-      try {
-        const parsedUser = JSON.parse(savedUser);
-        // Check if login is still valid (24 hours)
-        const loginTime = new Date(parsedUser.loginTime);
-        const now = new Date();
-        const hoursDiff = (now.getTime() - loginTime.getTime()) / (1000 * 60 * 60);
-        
-        if (hoursDiff < 24) {
-          setUser(parsedUser);
-        } else {
-          // Session expired, clear localStorage
-          localStorage.removeItem('banksampah_user');
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setFirebaseUser(firebaseUser);
+      
+      if (firebaseUser) {
+        // Get user profile from Firestore
+        try {
+          const userProfile = await authService.getUserProfile(firebaseUser.uid);
+          setUser(userProfile);
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+          setUser(null);
         }
-      } catch (error) {
-        console.error('Error parsing saved user:', error);
-        localStorage.removeItem('banksampah_user');
+      } else {
+        setUser(null);
       }
-    }
+      
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  const login = async (username: string, password: string): Promise<boolean> => {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    const foundUser = defaultUsers.find(
-      u => u.username === username && u.password === password
-    );
-
-    if (foundUser) {
-      const loggedUser: User = {
-        id: foundUser.id,
-        username: foundUser.username,
-        name: foundUser.name,
-        role: foundUser.role,
-        loginTime: new Date().toISOString()
-      };
-
-      setUser(loggedUser);
-      localStorage.setItem('banksampah_user', JSON.stringify(loggedUser));
-      return true;
+  const login = async (email: string, password: string): Promise<void> => {
+    try {
+      setLoading(true);
+      const userProfile = await authService.login(email, password);
+      setUser(userProfile);
+    } catch (error) {
+      console.error('Login error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
     }
-
-    return false;
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('banksampah_user');
+  const logout = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      await authService.logout();
+      setUser(null);
+      setFirebaseUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const value: AuthContextType = {
     user,
+    firebaseUser,
     login,
     logout,
-    isAuthenticated: !!user
+    isAuthenticated: !!user && !!firebaseUser,
+    loading
   };
 
   return (

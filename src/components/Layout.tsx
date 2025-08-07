@@ -22,8 +22,12 @@ interface LayoutProps {
 export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
   const { user, logout } = useAuth();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   return (
@@ -57,7 +61,7 @@ export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
             {/* User menu for desktop */}
             <div className="hidden sm:flex items-center gap-3">
               <Badge variant="secondary" className="bg-primary-foreground/10 text-primary-foreground text-xs">
-                {user?.role === 'admin' ? 'Admin' : 'Operator'}
+                {user?.role === 'admin' ? 'Admin' : user?.role === 'operator' ? 'Operator' : 'User'}
               </Badge>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -66,14 +70,17 @@ export const Layout = ({ children, activeTab, onTabChange }: LayoutProps) => {
                     className="text-primary-foreground hover:bg-primary-foreground/10 gap-2"
                   >
                     <User className="h-4 w-4" />
-                    <span className="text-sm">{user?.name}</span>
+                    <span className="text-sm">{user?.fullName}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium">{user?.name}</p>
-                      <p className="text-xs text-muted-foreground">@{user?.username}</p>
+                      <p className="text-sm font-medium">{user?.fullName}</p>
+                      <p className="text-xs text-muted-foreground">{user?.email}</p>
+                      {user?.rtNumber && (
+                        <p className="text-xs text-muted-foreground">RT {user.rtNumber}</p>
+                      )}
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />

@@ -1,0 +1,65 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection - only authenticated users can read their own data
+    match /users/{userId} {
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
+    }
+
+    // RTs collection - admins can do everything, operators can read their own RT
+    match /rts/{rtId} {
+      allow read: if request.auth != null && (
+        getUserRole() == 'admin' || 
+        getUserRtNumber() == resource.data.rtNumber
+      );
+      allow write: if request.auth != null && getUserRole() == 'admin';
+    }
+
+    // Members collection - role-based access
+    match /members/{memberId} {
+      allow read: if request.auth != null && (
+        getUserRole() == 'admin' || 
+        getUserRtNumber() == resource.data.rtNumber
+      );
+      allow write: if request.auth != null && (
+        getUserRole() == 'admin' || 
+        (getUserRole() == 'operator' && getUserRtNumber() == resource.data.rtNumber)
+      );
+    }
+
+    // Waste deposits - same as members
+    match /wasteDeposits/{depositId} {
+      allow read: if request.auth != null && (
+        getUserRole() == 'admin' || 
+        getUserRtNumber() == resource.data.rtNumber
+      );
+      allow write: if request.auth != null && (
+        getUserRole() == 'admin' || 
+        (getUserRole() == 'operator' && getUserRtNumber() == resource.data.rtNumber)
+      );
+    }
+
+    // Savings transactions - same as members
+    match /savingsTransactions/{transactionId} {
+      allow read: if request.auth != null && (
+        getUserRole() == 'admin' || 
+        getUserRtNumber() == resource.data.rtNumber
+      );
+      allow write: if request.auth != null && (
+        getUserRole() == 'admin' || 
+        (getUserRole() == 'operator' && getUserRtNumber() == resource.data.rtNumber)
+      );
+    }
+
+    // Helper functions
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function getUserRtNumber() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rtNumber;
+    }
+  }
+}

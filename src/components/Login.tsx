@@ -9,33 +9,38 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Leaf, Eye, EyeOff, LogIn, Loader2 } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, loading } = useAuth();
 
   // Redirect if already authenticated
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 
+  // Show loading screen while checking auth state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-green-600" />
+          <p className="text-gray-600">Memuat...</p>
+        </div>
+      </div>
+    );
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setIsLoading(true);
 
     try {
-      const success = await login(username, password);
-      if (!success) {
-        setError('Username atau password salah');
-      }
-    } catch (err) {
-      setError('Terjadi kesalahan saat login');
-    } finally {
-      setIsLoading(false);
+      await login(email, password);
+    } catch (error: any) {
+      setError(error.message || 'Terjadi kesalahan saat login');
     }
   };
 
@@ -71,18 +76,18 @@ export const Login: React.FC = () => {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-sm font-medium">
-                  Username
+                <Label htmlFor="email" className="text-sm font-medium">
+                  Email
                 </Label>
                 <Input
-                  id="username"
-                  type="text"
-                  placeholder="Masukkan username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  id="email"
+                  type="email"
+                  placeholder="Masukkan email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="h-11"
                   required
-                  disabled={isLoading}
+                  disabled={loading}
                 />
               </div>
 
@@ -99,7 +104,7 @@ export const Login: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11 pr-10"
                     required
-                    disabled={isLoading}
+                    disabled={loading}
                   />
                   <Button
                     type="button"
@@ -107,7 +112,7 @@ export const Login: React.FC = () => {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
+                    disabled={loading}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4 text-gray-400" />
@@ -121,9 +126,9 @@ export const Login: React.FC = () => {
               <Button
                 type="submit"
                 className="w-full h-11 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
-                disabled={isLoading || !username || !password}
+                disabled={loading || !email || !password}
               >
-                {isLoading ? (
+                {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Memproses...
@@ -139,18 +144,14 @@ export const Login: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Demo Credentials */}
+        {/* Demo Information */}
         <Card className="mt-6 bg-blue-50/80 border-blue-200">
           <CardContent className="pt-6">
-            <h3 className="font-medium text-blue-900 mb-3">Demo Kredensial:</h3>
-            <div className="space-y-2 text-sm">
+            <h3 className="font-medium text-blue-900 mb-3">Informasi Login:</h3>
+            <div className="space-y-2 text-sm text-blue-700">
               <div className="bg-white/60 p-2 rounded border">
-                <div className="font-medium text-blue-800">Admin:</div>
-                <div className="text-blue-700">Username: admin | Password: admin123</div>
-              </div>
-              <div className="bg-white/60 p-2 rounded border">
-                <div className="font-medium text-blue-800">Operator:</div>
-                <div className="text-blue-700">Username: operator | Password: op123</div>
+                <div className="font-medium">Gunakan email dan password yang telah didaftarkan</div>
+                <div>Untuk pendaftaran akun baru, hubungi administrator</div>
               </div>
             </div>
           </CardContent>
