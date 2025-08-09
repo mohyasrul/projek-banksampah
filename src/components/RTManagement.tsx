@@ -248,19 +248,22 @@ export const RTManagement = () => {
                   Tambah RT Baru
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>
+              <DialogContent className="mx-4 max-w-sm rounded-3xl border-0 shadow-2xl">
+                <DialogHeader className="text-center space-y-2 p-4 pb-3">
+                  <div className="bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto">
+                    <Users className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <DialogTitle className="text-lg font-bold text-slate-800">
                     {editingRT ? "Edit RT" : "Tambah RT Baru"}
                   </DialogTitle>
-                  <DialogDescription>
-                    {editingRT ? "Perbarui informasi RT" : "Masukkan informasi RT baru"}
+                  <DialogDescription className="text-xs text-slate-600">
+                    {editingRT ? "Perbarui informasi RT" : "Masukkan informasi RT baru untuk sistem"}
                   </DialogDescription>
                 </DialogHeader>
                 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="rtNumber">Nomor RT *</Label>
+                <form onSubmit={handleSubmit} className="space-y-3 p-4 pt-0">
+                  <div className="space-y-1">
+                    <Label htmlFor="rtNumber" className="text-xs font-medium text-slate-600">Nomor RT *</Label>
                     <Input
                       id="rtNumber"
                       placeholder="Contoh: 001"
@@ -268,12 +271,12 @@ export const RTManagement = () => {
                       onChange={(e) => setFormData({...formData, rtNumber: e.target.value})}
                       disabled={loading}
                       required
-                      className="rounded-lg"
+                      className="rounded-2xl border-slate-200 focus:border-blue-500 focus:ring-blue-500 h-10 text-sm"
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="rtLeader">Ketua RT *</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="rtLeader" className="text-xs font-medium text-slate-600">Ketua RT *</Label>
                     <Input
                       id="rtLeader"
                       placeholder="Nama Ketua RT"
@@ -281,12 +284,12 @@ export const RTManagement = () => {
                       onChange={(e) => setFormData({...formData, rtLeader: e.target.value})}
                       disabled={loading}
                       required
-                      className="rounded-lg"
+                      className="rounded-2xl border-slate-200 focus:border-blue-500 focus:ring-blue-500 h-10 text-sm"
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="totalMembers">Jumlah KK *</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="totalMembers" className="text-xs font-medium text-slate-600">Jumlah KK *</Label>
                     <Input
                       id="totalMembers"
                       type="number"
@@ -295,12 +298,14 @@ export const RTManagement = () => {
                       onChange={(e) => setFormData({...formData, totalMembers: e.target.value})}
                       disabled={loading}
                       required
-                      className="rounded-lg"
+                      className="rounded-2xl border-slate-200 focus:border-blue-500 focus:ring-blue-500 h-10 text-sm"
+                      min="1"
+                      step="1"
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Alamat *</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="address" className="text-xs font-medium text-slate-600">Alamat *</Label>
                     <Input
                       id="address"
                       placeholder="Alamat lengkap RT"
@@ -308,29 +313,62 @@ export const RTManagement = () => {
                       onChange={(e) => setFormData({...formData, address: e.target.value})}
                       disabled={loading}
                       required
-                      className="rounded-lg"
+                      className="rounded-2xl border-slate-200 focus:border-blue-500 focus:ring-blue-500 h-10 text-sm"
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Kontak</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="phone" className="text-xs font-medium text-slate-600">Kontak</Label>
                     <Input
                       id="phone"
-                      placeholder="Nomor telepon/HP"
+                      placeholder="Nomor telepon/HP (opsional)"
                       value={formData.phone}
                       onChange={(e) => setFormData({...formData, phone: e.target.value})}
                       disabled={loading}
-                      className="rounded-lg"
+                      className="rounded-2xl border-slate-200 focus:border-blue-500 focus:ring-blue-500 h-10 text-sm"
                     />
                   </div>
 
-                  <div className="flex gap-2 pt-4">
-                    <Button type="submit" disabled={loading} className="flex-1 rounded-lg">
-                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {editingRT ? "Perbarui" : "Simpan"}
-                    </Button>
-                    <Button type="button" variant="outline" onClick={handleCloseDialog} disabled={loading} className="rounded-lg">
+                  {/* Enhanced Preview */}
+                  {formData.rtNumber && formData.rtLeader && formData.totalMembers && (
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-2xl border border-blue-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-medium text-blue-800">RT {formData.rtNumber}</p>
+                          <p className="text-sm font-bold text-blue-700">
+                            {formData.rtLeader} • {formData.totalMembers} KK
+                          </p>
+                        </div>
+                        <div className="bg-blue-100 p-1.5 rounded-lg">
+                          <Users className="h-4 w-4 text-blue-600" />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-3">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={handleCloseDialog} 
+                      disabled={loading}
+                      className="flex-1 rounded-2xl border-slate-200 hover:bg-slate-50 h-9 text-xs"
+                    >
                       Batal
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={loading}
+                      className="flex-1 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg h-9 disabled:opacity-50 disabled:cursor-not-allowed text-xs"
+                    >
+                      {loading ? (
+                        <div className="flex items-center space-x-1">
+                          <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>{editingRT ? "Memperbarui..." : "Menyimpan..."}</span>
+                        </div>
+                      ) : (
+                        editingRT ? "Perbarui" : "Simpan"
+                      )}
                     </Button>
                   </div>
                 </form>

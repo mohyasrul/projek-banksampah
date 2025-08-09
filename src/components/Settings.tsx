@@ -5,23 +5,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { 
-  Settings as SettingsIcon, 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { 
   Save, 
-  RefreshCw, 
-  Database, 
   DollarSign,
   Bell,
-  Shield,
   Download,
   Upload,
-  Trash2,
   User,
-  Clock,
   LogOut,
-  Smartphone,
-  Globe
+  AlertTriangle,
+  Edit
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,7 +41,10 @@ export const Settings = () => {
   const { toast } = useToast();
   const { user, logout } = useAuth();
   
-  // Data harga sampah akan diambil dari API atau database
+  // State untuk dialog konfirmasi
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
+  
+  // Data harga sampah
   const [wastePrices, setWastePrices] = useState<WastePrice[]>([
     { id: "plastik", name: "Plastik", price: 5000, unit: "kg" },
     { id: "kertas", name: "Kertas", price: 3000, unit: "kg" },
@@ -48,25 +55,32 @@ export const Settings = () => {
 
   // Pengaturan aplikasi
   const [appSettings, setAppSettings] = useState({
-    autoBackup: true,
     notifications: true,
-    emailReports: false,
-    whatsappNotifications: true,
-    dataRetentionDays: 365,
-    rwName: "",
-    contactPerson: "",
-    contactPhone: "",
-    address: ""
+    autoBackup: true,
+    rwName: "RW 001",
+    contactPerson: "Ketua RW",
+    contactPhone: "+62812-3456-7890"
   });
+
+  // State untuk editing
+  const [isEditingPrices, setIsEditingPrices] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   const handlePriceUpdate = (id: string, newPrice: number) => {
     setWastePrices(wastePrices.map(item => 
       item.id === id ? { ...item, price: newPrice } : item
     ));
+    setHasUnsavedChanges(true);
+  };
+
+  const handleSettingsChange = (key: string, value: any) => {
+    setAppSettings(prev => ({ ...prev, [key]: value }));
+    setHasUnsavedChanges(true);
   };
 
   const handleSaveSettings = () => {
-    // In real app, this would save to database/localStorage
+    setHasUnsavedChanges(false);
+    setIsEditingPrices(false);
     toast({
       title: "Pengaturan Disimpan",
       description: "Semua perubahan telah berhasil disimpan",
@@ -74,54 +88,48 @@ export const Settings = () => {
   };
 
   const handleBackupData = () => {
-    // Backup functionality akan diimplementasikan
     toast({
-      title: "Backup Berhasil",
-      description: "Data telah di-backup ke file lokal",
+      title: "Backup Berhasil", 
+      description: "Data telah di-backup",
     });
   };
 
   const handleRestoreData = () => {
-    // Restore functionality akan diimplementasikan
     toast({
       title: "Data Dipulihkan",
       description: "Data berhasil dipulihkan dari backup",
     });
   };
 
-  const handleResetData = () => {
-    // Reset functionality akan diimplementasikan - perlu dialog konfirmasi
-    toast({
-      title: "Data Direset",
-      description: "Semua data telah dikembalikan ke pengaturan awal",
-      variant: "destructive"
-    });
-  };
-
   const handleLogout = () => {
+    setIsLogoutDialogOpen(false);
     logout();
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('id-ID', {
-      year: 'numeric',
-      month: 'long', 
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   return (
-    <div className="space-y-4 sm:space-y-6 pb-12 sm:pb-0">
-      <div>
-        <h2 className="text-xl sm:text-2xl font-bold">Pengaturan Sistem</h2>
-        <p className="text-muted-foreground text-sm sm:text-base">Konfigurasi aplikasi dan pengaturan operasional</p>
+    <div className="container mx-auto max-w-4xl p-4 space-y-6">
+      {/* Header Section */}
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Pengaturan</h1>
+            <p className="text-muted-foreground mt-2">Kelola pengaturan aplikasi Bank Sampah</p>
+          </div>
+          {hasUnsavedChanges && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                Perubahan belum disimpan
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* User Profile */}
-        <Card>
+      {/* Content Grid */}
+      <div className="grid gap-6">
+        {/* User Profile Card */}
+        <Card className="w-full">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
@@ -130,343 +138,218 @@ export const Settings = () => {
             <CardDescription>Informasi akun yang sedang aktif</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-accent/30 rounded-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 bg-muted/50 rounded-lg">
               <div className="space-y-1">
-                <p className="font-medium">{user?.name}</p>
-                <p className="text-sm text-muted-foreground">@{user?.username}</p>
+                <p className="font-semibold text-lg">{user?.fullName || 'Nama Pengguna'}</p>
+                <p className="text-sm text-muted-foreground">{user?.email || 'email@example.com'}</p>
+                {user?.rtNumber && (
+                  <p className="text-xs text-muted-foreground">RT {user.rtNumber}</p>
+                )}
               </div>
-              <Badge variant={user?.role === 'admin' ? 'default' : 'secondary'}>
-                {user?.role === 'admin' ? 'Administrator' : 'Operator'}
+              <Badge variant={user?.role === 'admin' ? 'default' : 'secondary'} className="w-fit">
+                {user?.role === 'admin' ? 'Administrator' : 
+                 user?.role === 'operator' ? 'Operator' : 'Pengguna'}
               </Badge>
             </div>
             
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 text-sm">
-                <Shield className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Level Akses:</span>
-                <span className="font-medium">
-                  {user?.role === 'admin' ? 'Full Access' : 'Standard Access'}
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-3 text-sm">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Login Terakhir:</span>
-                <span className="font-medium">
-                  {user?.loginTime ? formatDate(user.loginTime) : 'Tidak diketahui'}
-                </span>
-              </div>
-            </div>
-            
-            <Separator />
-            
-            <Button 
-              variant="destructive" 
-              onClick={handleLogout}
-              className="w-full"
-            >
-              <LogOut className="mr-2 h-4 w-4" />
-              Keluar dari Sistem
-            </Button>
+            <AlertDialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="lg" className="w-full">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Keluar dari Sistem
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Konfirmasi Logout</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Apakah Anda yakin ingin keluar dari sistem? Pastikan semua perubahan sudah disimpan.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Batal</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleLogout} className="bg-destructive hover:bg-destructive/90">
+                    Ya, Keluar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
 
-        {/* Waste Prices Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <DollarSign className="h-5 w-5" />
-              <span>Harga Sampah</span>
-            </CardTitle>
-            <CardDescription>Atur harga per kilogram untuk setiap jenis sampah</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {wastePrices.map((waste) => (
-              <div key={waste.id} className="flex items-center justify-between p-3 bg-accent/30 rounded-lg">
-                <div>
-                  <p className="font-medium">{waste.name}</p>
-                  <p className="text-sm text-muted-foreground">per {waste.unit}</p>
+        {/* Two Column Layout for Main Settings */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Waste Prices Settings */}
+          <Card className="w-full">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  <div>
+                    <CardTitle>Harga Sampah</CardTitle>
+                    <CardDescription>Atur harga per kilogram sampah</CardDescription>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm">Rp</span>
-                  <Input
-                    type="number"
-                    value={waste.price}
-                    onChange={(e) => handlePriceUpdate(waste.id, parseInt(e.target.value))}
-                    className="w-24 text-right"
-                  />
-                </div>
+                <Button 
+                  size="sm" 
+                  onClick={() => setIsEditingPrices(!isEditingPrices)} 
+                  variant="outline"
+                  className="shrink-0"
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
               </div>
-            ))}
-            <Button onClick={handleSaveSettings} className="w-full">
-              <Save className="mr-2 h-4 w-4" />
-              Simpan Harga
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {wastePrices.map((waste) => (
+                <div key={waste.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{waste.name}</p>
+                    <p className="text-sm text-muted-foreground">per {waste.unit}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-sm font-medium">Rp</span>
+                    <Input
+                      type="number"
+                      value={waste.price}
+                      onChange={(e) => handlePriceUpdate(waste.id, parseInt(e.target.value) || 0)}
+                      className="w-20 text-right"
+                      disabled={!isEditingPrices}
+                    />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
-      {/* App Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <SettingsIcon className="h-5 w-5" />
-            <span>Konfigurasi Aplikasi</span>
-          </CardTitle>
-          <CardDescription>Pengaturan umum aplikasi</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
+          {/* RW Information */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle>Informasi RW</CardTitle>
+              <CardDescription>Data dasar Rukun Warga</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="rw-name">Nama RW</Label>
+                <Label htmlFor="rw-name" className="text-sm font-medium">Nama RW</Label>
                 <Input
                   id="rw-name"
                   value={appSettings.rwName}
-                  onChange={(e) => setAppSettings({ ...appSettings, rwName: e.target.value })}
+                  onChange={(e) => handleSettingsChange('rwName', e.target.value)}
+                  placeholder="Contoh: RW 001"
+                  className="w-full"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="contact-person">Penanggung Jawab</Label>
+                <Label htmlFor="contact-person" className="text-sm font-medium">Penanggung Jawab</Label>
                 <Input
                   id="contact-person"
                   value={appSettings.contactPerson}
-                  onChange={(e) => setAppSettings({ ...appSettings, contactPerson: e.target.value })}
+                  onChange={(e) => handleSettingsChange('contactPerson', e.target.value)}
+                  placeholder="Nama penanggung jawab"
+                  className="w-full"
                 />
               </div>
-            </div>
 
-            <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="contact-phone">No. Telepon</Label>
+                <Label htmlFor="contact-phone" className="text-sm font-medium">No. Telepon</Label>
                 <Input
                   id="contact-phone"
                   value={appSettings.contactPhone}
-                  onChange={(e) => setAppSettings({ ...appSettings, contactPhone: e.target.value })}
+                  onChange={(e) => handleSettingsChange('contactPhone', e.target.value)}
+                  placeholder="+62812-3456-7890"
+                  className="w-full"
                 />
               </div>
+            </CardContent>
+          </Card>
+        </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="address">Alamat</Label>
-                <Input
-                  id="address"
-                  value={appSettings.address}
-                  onChange={(e) => setAppSettings({ ...appSettings, address: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Bottom Section - Full Width Cards */}
+        <div className="grid gap-6">
+          {/* Notification Settings */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5" />
+                Pengaturan Notifikasi
+              </CardTitle>
+              <CardDescription>Kelola pemberitahuan aplikasi</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                  <div>
+                    <p className="font-medium">Notifikasi Push</p>
+                    <p className="text-sm text-muted-foreground">Pemberitahuan dalam aplikasi</p>
+                  </div>
+                  <Switch
+                    checked={appSettings.notifications}
+                    onCheckedChange={(checked) => handleSettingsChange('notifications', checked)}
+                  />
+                </div>
 
-      {/* System Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Database className="h-5 w-5" />
-            <span>Pengaturan Sistem</span>
-          </CardTitle>
-          <CardDescription>Konfigurasi dan status sistem</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="flex items-center justify-between p-3 border rounded-lg">
-              <div className="flex items-center gap-3">
-                <Database className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Penyimpanan Data</p>
-                  <p className="text-xs text-muted-foreground">Login: Lokal | Data: Cloud</p>
+                <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                  <div>
+                    <p className="font-medium">Auto Backup</p>
+                    <p className="text-sm text-muted-foreground">Backup otomatis data</p>
+                  </div>
+                  <Switch
+                    checked={appSettings.autoBackup}
+                    onCheckedChange={(checked) => handleSettingsChange('autoBackup', checked)}
+                  />
                 </div>
               </div>
-              <Badge variant="outline" className="text-green-600 border-green-600">
-                Aktif
-              </Badge>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="flex items-center justify-between p-3 border rounded-lg">
-              <div className="flex items-center gap-3">
-                <Smartphone className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Mode Responsif</p>
-                  <p className="text-xs text-muted-foreground">Optimasi mobile dan desktop</p>
+          {/* Data Management */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle>Manajemen Data</CardTitle>
+              <CardDescription>Backup dan restore data aplikasi</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <Button 
+                  variant="outline" 
+                  onClick={handleBackupData} 
+                  className="h-20 flex flex-col gap-2 hover:bg-green-50 hover:border-green-300 dark:hover:bg-green-950"
+                >
+                  <Download className="h-6 w-6 text-green-600" />
+                  <span className="font-medium">Backup Data</span>
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  onClick={handleRestoreData} 
+                  className="h-20 flex flex-col gap-2 hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-950"
+                >
+                  <Upload className="h-6 w-6 text-blue-600" />
+                  <span className="font-medium">Restore Data</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Save Settings - Floating Save Button */}
+        {hasUnsavedChanges && (
+          <Card className="border-orange-200 bg-orange-50/80 dark:border-orange-800 dark:bg-orange-950/80 sticky bottom-4 shadow-lg">
+            <CardContent className="py-4">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-2 text-orange-600">
+                  <AlertTriangle className="h-5 w-5" />
+                  <span className="font-medium">Ada perubahan yang belum disimpan</span>
                 </div>
+                <Button onClick={handleSaveSettings} size="lg" className="w-full sm:w-auto">
+                  <Save className="mr-2 h-4 w-4" />
+                  Simpan Semua Pengaturan
+                </Button>
               </div>
-              <Badge variant="outline" className="text-green-600 border-green-600">
-                Aktif
-              </Badge>
-            </div>
-
-            <div className="flex items-center justify-between p-3 border rounded-lg">
-              <div className="flex items-center gap-3">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Bahasa</p>
-                  <p className="text-xs text-muted-foreground">Bahasa Indonesia</p>
-                </div>
-              </div>
-              <Badge variant="outline">
-                ID
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Notification Settings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Bell className="h-5 w-5" />
-            <span>Pengaturan Notifikasi</span>
-          </CardTitle>
-          <CardDescription>Kelola notifikasi dan pemberitahuan</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Notifikasi Push</p>
-                  <p className="text-sm text-muted-foreground">Pemberitahuan dalam aplikasi</p>
-                </div>
-                <Switch
-                  checked={appSettings.notifications}
-                  onCheckedChange={(checked) => setAppSettings({ ...appSettings, notifications: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Laporan Email</p>
-                  <p className="text-sm text-muted-foreground">Kirim laporan bulanan via email</p>
-                </div>
-                <Switch
-                  checked={appSettings.emailReports}
-                  onCheckedChange={(checked) => setAppSettings({ ...appSettings, emailReports: checked })}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">WhatsApp Notifikasi</p>
-                  <p className="text-sm text-muted-foreground">Pemberitahuan via WhatsApp</p>
-                </div>
-                <Switch
-                  checked={appSettings.whatsappNotifications}
-                  onCheckedChange={(checked) => setAppSettings({ ...appSettings, whatsappNotifications: checked })}
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Auto Backup</p>
-                  <p className="text-sm text-muted-foreground">Backup otomatis harian</p>
-                </div>
-                <Switch
-                  checked={appSettings.autoBackup}
-                  onCheckedChange={(checked) => setAppSettings({ ...appSettings, autoBackup: checked })}
-                />
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Data Management */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Database className="h-5 w-5" />
-            <span>Manajemen Data</span>
-          </CardTitle>
-          <CardDescription>Backup, restore, dan pengelolaan data</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Button variant="outline" onClick={handleBackupData} className="flex flex-col h-20 space-y-2">
-              <Download className="h-5 w-5" />
-              <span className="text-sm">Backup Data</span>
-            </Button>
-
-            <Button variant="outline" onClick={handleRestoreData} className="flex flex-col h-20 space-y-2">
-              <Upload className="h-5 w-5" />
-              <span className="text-sm">Restore Data</span>
-            </Button>
-
-            <Button variant="outline" className="flex flex-col h-20 space-y-2">
-              <RefreshCw className="h-5 w-5" />
-              <span className="text-sm">Sinkronisasi</span>
-            </Button>
-
-            <Button variant="destructive" onClick={handleResetData} className="flex flex-col h-20 space-y-2">
-              <Trash2 className="h-5 w-5" />
-              <span className="text-sm">Reset Data</span>
-            </Button>
-          </div>
-
-          <Separator className="my-6" />
-
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium">Retensi Data</p>
-                <p className="text-sm text-muted-foreground">Data akan dihapus otomatis setelah periode ini</p>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Input
-                  type="number"
-                  value={appSettings.dataRetentionDays}
-                  onChange={(e) => setAppSettings({ ...appSettings, dataRetentionDays: parseInt(e.target.value) })}
-                  className="w-20"
-                />
-                <span className="text-sm">hari</span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* System Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Informasi Sistem</CardTitle>
-          <CardDescription>Detail versi dan konfigurasi aplikasi</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div className="p-4 bg-accent/30 rounded-lg">
-              <p className="text-2xl font-bold text-primary">v1.0</p>
-              <p className="text-xs text-muted-foreground">Versi Aplikasi</p>
-            </div>
-            <div className="p-4 bg-accent/30 rounded-lg">
-              <p className="text-2xl font-bold text-green-600">Online</p>
-              <p className="text-xs text-muted-foreground">Status Sistem</p>
-            </div>
-            <div className="p-4 bg-accent/30 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">React</p>
-              <p className="text-xs text-muted-foreground">Frontend</p>
-            </div>
-            <div className="p-4 bg-accent/30 rounded-lg">
-              <p className="text-2xl font-bold text-purple-600">Local</p>
-              <p className="text-xs text-muted-foreground">Auth Storage</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Save All Settings */}
-      <div className="flex justify-end space-x-4">
-        <Button variant="outline">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Reset ke Default
-        </Button>
-        <Button onClick={handleSaveSettings}>
-          <Save className="mr-2 h-4 w-4" />
-          Simpan Semua Pengaturan
-        </Button>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

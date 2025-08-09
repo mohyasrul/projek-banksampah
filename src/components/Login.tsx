@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
-import { Leaf, Eye, EyeOff, LogIn, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, LogIn, Loader2 } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -46,16 +46,18 @@ export const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md space-y-6">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-3 rounded-full shadow-lg">
-              <Leaf className="h-8 w-8 text-white" />
-            </div>
+            <img
+              src="/logo-app-cropped.jpeg"
+              alt="Logo Hijau Lestari"
+              className="h-20 w-20 rounded-full shadow-lg object-cover border-4 border-white"
+            />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Bank Sampah RW</h1>
-          <p className="text-gray-600 mt-2">Sistem Manajemen Tabungan Sampah</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Hijau Lestari</h1>
+          <p className="text-gray-600">Sistem Manajemen Tabungan Sampah</p>
         </div>
 
         {/* Login Card */}
@@ -67,7 +69,7 @@ export const Login: React.FC = () => {
             </CardDescription>
           </CardHeader>
           
-          <CardContent>
+          <CardContent className="pb-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
                 <Alert variant="destructive" className="mb-4">
@@ -125,7 +127,7 @@ export const Login: React.FC = () => {
 
               <Button
                 type="submit"
-                className="w-full h-11 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                className="w-full h-11 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 transition-all duration-200"
                 disabled={loading || !email || !password}
               >
                 {loading ? (
@@ -144,14 +146,34 @@ export const Login: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Demo Information */}
-        <Card className="mt-6 bg-blue-50/80 border-blue-200">
-          <CardContent className="pt-6">
-            <h3 className="font-medium text-blue-900 mb-3">Informasi Login:</h3>
-            <div className="space-y-2 text-sm text-blue-700">
-              <div className="bg-white/60 p-2 rounded border">
-                <div className="font-medium">Gunakan email dan password yang telah didaftarkan</div>
-                <div>Untuk pendaftaran akun baru, hubungi administrator</div>
+        {/* Presentation Information */}
+        <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-lg">
+          <CardContent className="p-6">
+            <div className="text-center space-y-4">
+              <h3 className="font-semibold text-green-900 text-base">Dipersembahkan oleh:</h3>
+              
+              {/* Logos */}
+              <div className="flex justify-center items-center gap-8">
+                <div className="flex flex-col items-center">
+                  <img
+                    src="/logo-kampus.png"
+                    alt="Logo Institut Teknologi Garut"
+                    className="h-14 w-14 object-contain"
+                  />
+                </div>
+                <div className="flex flex-col items-center">
+                  <img
+                    src="/logo-kkn.png"
+                    alt="Logo KKN"
+                    className="h-14 w-14 object-contain"
+                  />
+                </div>
+              </div>
+              
+              {/* Text Information */}
+              <div className="text-sm text-green-800 space-y-1">
+                <div className="font-semibold">Program Kuliah Kerja Nyata Tematik 2025</div>
+                <div className="font-medium">Institut Teknologi Garut</div>
               </div>
             </div>
           </CardContent>

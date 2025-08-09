@@ -22,7 +22,8 @@ import {
   BarChart, 
   CreditCard,
   Minus,
-  Users
+  Users,
+  Plus
 } from 'lucide-react';
 
 interface RTSavings {
@@ -195,13 +196,15 @@ export default function Savings() {
   };
 
   // Filter RT yang bisa ditarik (hanya yang punya saldo > 0)
-  const availableRTsForWithdraw = filteredRTs.filter(rt => rt.totalSavings > 0);
+  const availableRTsForWithdraw = rtList.filter(rt => rt.totalSavings > 0);
 
   return (
     <>
       {/* Modern Layout with Background */}
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-3 sm:p-6 space-y-4 sm:space-y-6 pb-24">
-        
+        <h1 className="text-lg sm:text-xl font-semibold text-slate-700 mb-1">
+          Kelola Tabungan
+        </h1>
         {/* Modern Hero Section */}
         <div className="relative overflow-hidden bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 rounded-2xl sm:rounded-3xl p-4 sm:p-8 text-white shadow-2xl">
           <div className="absolute inset-0 bg-black/10"></div>
@@ -215,9 +218,6 @@ export default function Savings() {
                   <Wallet className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h1 className="text-xl sm:text-3xl font-bold mb-1 truncate">
-                    Kelola Tabungan
-                  </h1>
                   <p className="text-purple-100 text-sm sm:text-lg">
                     Lihat dan kelola tabungan dari RT
                   </p>
@@ -440,23 +440,52 @@ export default function Savings() {
       </div>
 
       {/* Enhanced Floating Action Button */}
-      <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-40">
-        <Button
-          onClick={() => setIsWithdrawDialogOpen(true)}
-          size="lg"
-          className="w-14 h-14 sm:w-16 sm:h-16 rounded-full shadow-xl bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white transition-all duration-300 hover:scale-110"
-          disabled={availableRTsForWithdraw.length === 0}
-        >
-          <Minus className="h-6 w-6 sm:h-7 sm:w-7" />
-        </Button>
+      <div className="fixed bottom-24 right-4 sm:right-6 z-40">
+        <div className="flex flex-col items-end space-y-2">
+          {/* Tooltip atau Label */}
+          {!loading && availableRTsForWithdraw.length > 0 && (
+            <div className="bg-green-600 text-white px-3 py-1 rounded-lg text-xs font-medium shadow-lg transform translate-x-2 hidden sm:block">
+              Tarik Tabungan
+            </div>
+          )}
+          
+          <Button
+            onClick={() => {
+              if (availableRTsForWithdraw.length === 0) {
+                toast({
+                  title: "Tidak Ada RT Tersedia",
+                  description: "Tidak ada RT dengan saldo positif untuk penarikan",
+                  variant: "destructive"
+                });
+                return;
+              }
+              setIsWithdrawDialogOpen(true);
+            }}
+            size="sm"
+            className={`w-12 h-12 rounded-full shadow-lg text-white transition-all duration-300 hover:scale-110 ${
+              availableRTsForWithdraw.length === 0 
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700'
+            }`}
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+          
+          {/* Counter badge */}
+          {availableRTsForWithdraw.length > 0 && (
+            <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md">
+              {availableRTsForWithdraw.length}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Enhanced Withdrawal Dialog */}
       <Dialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
         <DialogContent className="mx-4 max-w-md rounded-2xl border-0 shadow-2xl">
           <DialogHeader className="text-center space-y-3 p-6 pb-4">
-            <div className="bg-gradient-to-r from-red-100 to-pink-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
-              <Minus className="h-8 w-8 text-red-600" />
+            <div className="bg-gradient-to-r from-green-100 to-emerald-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto">
+              <Plus className="h-8 w-8 text-green-600" />
             </div>
             <DialogTitle className="text-xl sm:text-2xl font-bold text-slate-800">
               Penarikan Tabungan
@@ -473,20 +502,26 @@ export default function Savings() {
                 value={withdrawForm.rtNumber}
                 onValueChange={(value) => setWithdrawForm(prev => ({ ...prev, rtNumber: value }))}
               >
-                <SelectTrigger className="rounded-xl border-slate-200 focus:border-red-500 focus:ring-red-500 h-12">
+                <SelectTrigger className="rounded-xl border-slate-200 focus:border-green-500 focus:ring-green-500 h-12">
                   <SelectValue placeholder="Pilih RT yang akan ditarik" />
                 </SelectTrigger>
-                <SelectContent className="bg-white border border-slate-200 rounded-xl shadow-lg">
-                  {availableRTsForWithdraw.map((rt) => (
-                    <SelectItem key={rt.rtNumber} value={rt.rtNumber} className="hover:bg-red-50">
-                      <div className="flex flex-col items-start py-1">
-                        <span className="font-medium">RT {rt.rtNumber}</span>
-                        <span className="text-xs text-slate-500">
-                          Saldo: Rp {rt.totalSavings.toLocaleString('id-ID')}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
+                <SelectContent className="bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-auto">
+                  {availableRTsForWithdraw.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500">
+                      <p className="text-sm">Tidak ada RT dengan saldo positif</p>
+                    </div>
+                  ) : (
+                    availableRTsForWithdraw.map((rt) => (
+                      <SelectItem key={rt.rtNumber} value={rt.rtNumber} className="hover:bg-green-50">
+                        <div className="flex flex-col items-start py-1">
+                          <span className="font-medium">RT {rt.rtNumber}</span>
+                          <span className="text-xs text-slate-500">
+                            Saldo: Rp {rt.totalSavings.toLocaleString('id-ID')}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -500,16 +535,61 @@ export default function Savings() {
                   type="number"
                   placeholder="Masukkan jumlah penarikan"
                   value={withdrawForm.amount}
-                  onChange={(e) => setWithdrawForm(prev => ({ ...prev, amount: e.target.value }))}
-                  className="pl-10 rounded-xl border-slate-200 focus:border-red-500 focus:ring-red-500 h-12"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Hanya izinkan angka positif
+                    if (value === '' || (parseFloat(value) >= 0)) {
+                      setWithdrawForm(prev => ({ ...prev, amount: value }));
+                    }
+                  }}
+                  className="pl-10 rounded-xl border-slate-200 focus:border-green-500 focus:ring-green-500 h-12"
                   min="1000"
                   step="1000"
+                  max={withdrawForm.rtNumber ? availableRTsForWithdraw.find(rt => rt.rtNumber === withdrawForm.rtNumber)?.totalSavings : undefined}
                 />
               </div>
               {withdrawForm.rtNumber && (
-                <p className="text-xs text-slate-500">
-                  Saldo tersedia: Rp {availableRTsForWithdraw.find(rt => rt.rtNumber === withdrawForm.rtNumber)?.totalSavings.toLocaleString('id-ID')}
-                </p>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-500">
+                    Saldo tersedia: Rp {availableRTsForWithdraw.find(rt => rt.rtNumber === withdrawForm.rtNumber)?.totalSavings.toLocaleString('id-ID')}
+                  </span>
+                  {withdrawForm.amount && parseFloat(withdrawForm.amount) > 0 && (
+                    <span className={`font-medium ${
+                      parseFloat(withdrawForm.amount) > (availableRTsForWithdraw.find(rt => rt.rtNumber === withdrawForm.rtNumber)?.totalSavings || 0)
+                        ? 'text-red-600' : 'text-green-600'
+                    }`}>
+                      {parseFloat(withdrawForm.amount) > (availableRTsForWithdraw.find(rt => rt.rtNumber === withdrawForm.rtNumber)?.totalSavings || 0)
+                        ? 'Melebihi saldo!' : 'Valid'}
+                    </span>
+                  )}
+                </div>
+              )}
+              
+              {/* Quick Amount Buttons */}
+              {withdrawForm.rtNumber && (
+                <div className="grid grid-cols-4 gap-2 mt-2">
+                  {[10000, 25000, 50000, 100000].map((quickAmount) => {
+                    const maxAmount = availableRTsForWithdraw.find(rt => rt.rtNumber === withdrawForm.rtNumber)?.totalSavings || 0;
+                    const isDisabled = quickAmount > maxAmount;
+                    return (
+                      <Button
+                        key={quickAmount}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={`text-xs p-2 h-8 rounded-lg border transition-all ${
+                          isDisabled 
+                            ? 'border-gray-200 text-gray-400 cursor-not-allowed' 
+                            : 'border-green-200 text-green-600 hover:bg-green-50 hover:border-green-300'
+                        }`}
+                        disabled={isDisabled}
+                        onClick={() => setWithdrawForm(prev => ({ ...prev, amount: quickAmount.toString() }))}
+                      >
+                        {quickAmount >= 1000000 ? `${quickAmount/1000000}M` : `${quickAmount/1000}K`}
+                      </Button>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
@@ -520,22 +600,22 @@ export default function Savings() {
                 placeholder="Keterangan penarikan (contoh: Bayar sampah)"
                 value={withdrawForm.description}
                 onChange={(e) => setWithdrawForm(prev => ({ ...prev, description: e.target.value }))}
-                className="rounded-xl border-slate-200 focus:border-red-500 focus:ring-red-500 h-12"
+                className="rounded-xl border-slate-200 focus:border-green-500 focus:ring-green-500 h-12"
               />
             </div>
 
             {/* Enhanced Preview */}
             {withdrawForm.rtNumber && withdrawForm.amount && parseFloat(withdrawForm.amount) > 0 && (
-              <div className="bg-gradient-to-r from-red-50 to-pink-50 p-4 rounded-xl border border-red-200">
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-xl border border-green-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-red-800">Jumlah Penarikan</p>
-                    <p className="text-lg font-bold text-red-700">
+                    <p className="text-sm font-medium text-green-800">Jumlah Penarikan</p>
+                    <p className="text-lg font-bold text-green-700">
                       Rp {parseFloat(withdrawForm.amount).toLocaleString('id-ID')}
                     </p>
                   </div>
-                  <div className="bg-red-100 p-2 rounded-lg">
-                    <Minus className="h-5 w-5 text-red-600" />
+                  <div className="bg-green-100 p-2 rounded-lg">
+                    <Plus className="h-5 w-5 text-green-600" />
                   </div>
                 </div>
               </div>
@@ -545,7 +625,10 @@ export default function Savings() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsWithdrawDialogOpen(false)}
+                onClick={() => {
+                  setIsWithdrawDialogOpen(false);
+                  setWithdrawForm({ rtNumber: "", amount: "", description: "" });
+                }}
                 className="flex-1 rounded-xl border-slate-200 hover:bg-slate-50 h-12"
                 disabled={withdrawLoading}
               >
@@ -553,10 +636,24 @@ export default function Savings() {
               </Button>
               <Button
                 type="submit"
-                className="flex-1 rounded-xl bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white shadow-lg h-12"
-                disabled={withdrawLoading}
+                className="flex-1 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg h-12 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={
+                  withdrawLoading || 
+                  !withdrawForm.rtNumber || 
+                  !withdrawForm.amount || 
+                  !withdrawForm.description ||
+                  parseFloat(withdrawForm.amount) <= 0 ||
+                  parseFloat(withdrawForm.amount) > (availableRTsForWithdraw.find(rt => rt.rtNumber === withdrawForm.rtNumber)?.totalSavings || 0)
+                }
               >
-                {withdrawLoading ? 'Memproses...' : 'Tarik Saldo'}
+                {withdrawLoading ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Memproses...</span>
+                  </div>
+                ) : (
+                  'Tarik Saldo'
+                )}
               </Button>
             </div>
           </form>

@@ -139,6 +139,9 @@ export const Reports = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-3 sm:p-6 space-y-4 sm:space-y-6 pb-24">
+      <h1 className="text-lg sm:text-xl font-semibold text-slate-700 mb-1">
+          Laporan
+      </h1>
       {/* Modern Hero Section */}
       <div className="relative overflow-hidden bg-gradient-to-r from-orange-600 via-red-600 to-pink-600 rounded-2xl sm:rounded-3xl p-4 sm:p-8 text-white shadow-2xl">
         <div className="absolute inset-0 bg-black/10"></div>
@@ -152,9 +155,6 @@ export const Reports = () => {
                 <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h1 className="text-xl sm:text-3xl font-bold mb-1 truncate">
-                  Laporan Bank Sampah
-                </h1>
                 <p className="text-orange-100 text-sm sm:text-lg">
                   Laporan komprehensif setoran sampah dan tabungan
                 </p>
